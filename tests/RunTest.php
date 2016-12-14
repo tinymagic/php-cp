@@ -4,6 +4,7 @@ define("PHPCP_TESTRUN", true);
 
 require_once(dirname($_SERVER["PHP_SELF"])."/TestSuite.php");
 require_once(dirname($_SERVER["PHP_SELF"])."/RedisTest.php");
+require_once(dirname($_SERVER["PHP_SELF"])."/MemcachedTest.php");
 
 /* 确保错误信息可以被正常输出到 stdout */
 error_reporting(E_ALL);

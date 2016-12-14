@@ -38,3 +38,7 @@ pool_max = 30
 ['192.168.1.19:6379:0'];redis配置 ip:port:db号
 pool_min = 2
 pool_max = 30
+
+['172.17.0.4:11211'];memcache配置
+pool_min = 2
+pool_max = 30
