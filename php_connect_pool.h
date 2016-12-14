@@ -205,6 +205,7 @@ PHP_METHOD(redis_connect_pool, __construct);
 PHP_METHOD(redis_connect_pool, __destruct);
 PHP_METHOD(redis_connect_pool, __call);
 PHP_METHOD(redis_connect_pool, release);
+PHP_METHOD(redis_connect_pool, auth);
 PHP_METHOD(redis_connect_pool, select);
 PHP_METHOD(redis_connect_pool, connect);
 PHP_METHOD(redis_connect_pool, done);

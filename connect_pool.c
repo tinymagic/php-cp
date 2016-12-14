@@ -77,7 +77,7 @@ ZEND_END_ARG_INFO()
 
 const zend_function_entry pdo_connect_pool_methods[] = {
     PHP_ME(pdo_connect_pool, __construct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(pdo_connect_pool, __destruct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+    PHP_ME(pdo_connect_pool, __destruct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_DTOR)
     PHP_ME(pdo_connect_pool, __call, __call_args, ZEND_ACC_PUBLIC)
     PHP_ME(pdo_connect_pool, release, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(pdo_connect_pool, close, NULL, ZEND_ACC_PUBLIC)
@@ -172,11 +172,12 @@ PHP_METHOD(pdo_connect_pool_PDOStatement, valid)
 
 const zend_function_entry redis_connect_pool_methods[] = {
     PHP_ME(redis_connect_pool, __construct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(redis_connect_pool, __destruct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+    PHP_ME(redis_connect_pool, __destruct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_DTOR)
     PHP_ME(redis_connect_pool, __call, __call_args, ZEND_ACC_PUBLIC)
     PHP_ME(redis_connect_pool, release, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(redis_connect_pool, select, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(redis_connect_pool, connect, NULL, ZEND_ACC_PUBLIC)
+    PHP_ME(redis_connect_pool, auth, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(redis_connect_pool, done, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(redis_connect_pool, setAsync, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(redis_connect_pool, close, NULL, ZEND_ACC_PUBLIC)
@@ -755,18 +756,41 @@ static int cp_redis_select(zval *new_obj, zval **db)
     //有db并且不0那么就select
     if (strcmp("0", Z_STRVAL_PP(db)) != 0)
     {
-        zval **tmp_pass2[1];
-        tmp_pass2[0] = db;
+        zval **tmp_pass[1];
+        tmp_pass[0] = db;
         zval * ret_redis_select = NULL;
         zval select_fun_name;
         CP_ZVAL_STRING(&select_fun_name, "select", 0);
-        cp_call_user_function_ex(NULL, &new_obj, &select_fun_name, &ret_redis_select, 1, tmp_pass2, 0, NULL TSRMLS_CC);
+        cp_call_user_function_ex(NULL, &new_obj, &select_fun_name, &ret_redis_select, 1, tmp_pass, 0, NULL TSRMLS_CC);
         if (ret_redis_select)
             cp_zval_ptr_dtor(&ret_redis_select);
 
         if (EG(exception))
         {
+            cp_zval_ptr_dtor(&new_obj);
+            CP_SEND_EXCEPTION_RETURN;
+        }
+    }
+    return CP_TRUE;
+}
 
+static int cp_redis_auth(zval *new_obj, zval *args)
+{
+    zval *auth, *ret_redis_auth = NULL;
+    if (cp_zend_hash_find(Z_ARRVAL_P(args), ZEND_STRS("auth"), (void **) &auth) == SUCCESS)
+    {
+        zval auth_fun_name;
+        CP_ZVAL_STRING(&auth_fun_name, "auth", 0);
+        zval **tmp_pass[1];
+        tmp_pass[0] = &auth;
+        cp_call_user_function_ex(NULL, &new_obj, &auth_fun_name, &ret_redis_auth, 1, tmp_pass, 0, NULL TSRMLS_CC);
+        if (ret_redis_auth)
+        {
+            cp_zval_ptr_dtor(&ret_redis_auth);
+        }
+
+        if (EG(exception))
+        {
             cp_zval_ptr_dtor(&new_obj);
             CP_SEND_EXCEPTION_RETURN;
         }
@@ -836,6 +860,11 @@ int redis_proxy_connect(zval *data_source, zval *args, int flag)
         cp_zval_ptr_dtor(&new_obj);
         cp_zval_ptr_dtor(&ex_arr);
         return CP_TRUE;
+    }
+
+    if (!cp_redis_auth(new_obj, args))
+    {
+        return CP_FALSE;
     }
 
     if (cp_zend_hash_index_find(Z_ARRVAL_P(ex_arr), 2, (void**) &db) == SUCCESS)

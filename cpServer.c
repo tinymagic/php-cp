@@ -16,7 +16,7 @@
 #include "php_connect_pool.h"
 
 int static cpListen();
-void static cpSignalHanlde(int sig);
+void static cpSignalHandle(int sig);
 void static cpSignalInit(void);
 int static cpReactor_client_close(int fd);
 static int cpReactor_client_receive(int fd);
@@ -689,7 +689,7 @@ int static cpListen()
     return sock;
 }
 
-static void cpSignalHanlde(int sig)
+static void cpSignalHandle(int sig)
 {
     switch (sig)
     {
@@ -785,7 +785,7 @@ void static cpSignalInit(void)
 {
     cpSignalSet(SIGHUP, SIG_IGN, 1, 0);
     cpSignalSet(SIGPIPE, SIG_IGN, 1, 0);
-    cpSignalSet(SIGUSR1, cpSignalHanlde, 1, 0);
+    cpSignalSet(SIGUSR1, cpSignalHandle, 1, 0);
     cpSignalSet(SIGUSR2, SIG_IGN, 1, 0);
-    cpSignalSet(SIGTERM, cpSignalHanlde, 1, 0);
+    cpSignalSet(SIGTERM, cpSignalHandle, 1, 0);
 }
