@@ -1,10 +1,11 @@
 <?php
 ini_set('memory_limit', '2048M');
 ini_set("display_errors", "On");
+$pid_location = "/var/run/con_pool_.pid";
 $conf = "/etc/pool.ini"; //pool_server的配置文件
 
 if (empty($argv[1])) {
-    echo "Usage: pool_server {start|stop|restart}\n";
+    echo "Usage: pool_server {start|status|stop|restart}\n";
     exit;
 }
 
@@ -17,19 +18,24 @@ switch ($cmd) {
     case "start":
         pool_server_create($conf);
         break;
+    case "status":
+        pool_server_status((int) file_get_contents($pid_location));
+        break;
     case "reload":
-        pool_server_reload((int) file_get_contents("/var/run/con_pool_.pid"));
+        pool_server_reload((int) file_get_contents($pid_location));
         echo "Tips: The reload can only modify 'pool_min','pool_max','recycle_num' and 'idel_time'\n";
         die;
         break;
     case "stop":
-        pool_server_shutdown((int) file_get_contents("/var/run/con_pool_.pid"));
+        pool_server_shutdown((int) file_get_contents($pid_location));
+        file_put_contents($pid_location, "");
         break;
     case "restart":
-        pool_server_shutdown((int) file_get_contents("/var/run/con_pool_.pid"));
+        @pool_server_shutdown((int) file_get_contents($pid_location));
         sleep(1);
         pool_server_create($conf);
         break;
     default:
+        echo "Usage: pool_server {start|status|stop|restart}\n";
         break;
 }

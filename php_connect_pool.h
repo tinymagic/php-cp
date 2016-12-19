@@ -139,7 +139,8 @@ typedef struct _cpRecvEvent
 #define CP_SIGEVENT_TURE         1//01
 #define CP_SIGEVENT_EXCEPTION    2//10
 #define CP_SIGEVENT_PDO          3//11
-#define CP_SIGEVENT_STMT_OBJ     4//11
+#define CP_SIGEVENT_STMT_OBJ     4//100
+#define CP_SIGEVENT_STATUS       5//101
 #define CP_EVENTLEN_ADD_TYPE(len,__type) \
                                          len  = len <<2;\
                                          len = len | __type;
@@ -174,6 +175,7 @@ PHP_RSHUTDOWN_FUNCTION(connect_pool);
 PHP_MINFO_FUNCTION(connect_pool);
 
 PHP_FUNCTION(pool_server_create);
+PHP_FUNCTION(pool_server_status);
 PHP_FUNCTION(pool_server_shutdown);
 PHP_FUNCTION(pool_server_reload);
 PHP_FUNCTION(pool_server_version);

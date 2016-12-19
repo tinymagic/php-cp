@@ -64,6 +64,7 @@ static void cp_add_fail_into_mem(zval *conf, zval *data_source);
 
 const zend_function_entry cp_functions[] = {
     PHP_FE(pool_server_create, NULL)
+    PHP_FE(pool_server_status, NULL)
     PHP_FE(pool_server_shutdown, NULL)
     PHP_FE(pool_server_reload, NULL)
     PHP_FE(pool_server_version, NULL)
@@ -192,7 +193,6 @@ const zend_function_entry memcached_connect_pool_methods[] = {
     PHP_FE_END
 };
 
-
 int le_cp_server;
 int le_cli_connect_pool;
 
@@ -234,7 +234,6 @@ ZEND_GET_MODULE(connect_pool)
 
 PHP_MINIT_FUNCTION(connect_pool)
 {
-
     le_cli_connect_pool = zend_register_list_destructors_ex(send_oob2proxy, cp_destory_client, CP_RES_CLIENT_NAME, module_number); //持久
 
     INIT_CLASS_ENTRY(pdo_connect_pool_ce, "pdoProxy", pdo_connect_pool_methods);
@@ -433,7 +432,7 @@ PHP_FUNCTION(pool_server_shutdown)
     }
 }
 
-int CP_INTERNAL_SERIALIZE_SEND_MEM(zval *ret_value, uint8_t __type)
+int CP_INTERNAL_SERIALIZE_SEND_MEM(zval *send_data, uint8_t __type)
 {
     cpShareMemory *sm_obj = &(CPGS->G[CPWG.gid].workers[CPWG.id].sm_obj);
     instead_smart dest;
@@ -441,7 +440,7 @@ int CP_INTERNAL_SERIALIZE_SEND_MEM(zval *ret_value, uint8_t __type)
     dest.addr = sm_obj->mem;
     dest.max = CPGC.max_read_len;
     dest.exceed = 0;
-    php_msgpack_serialize(&dest, ret_value);
+    php_msgpack_serialize(&dest, send_data);
     if (dest.exceed == 1)
     {
         CP_INTERNAL_ERROR_SEND("data is exceed,increase max_read_len");
@@ -988,18 +987,67 @@ static void memcached_dispatch(zval *args)
     cp_zval_ptr_dtor(&ret_value);
 }
 
-int worker_onReceive(zval * unser_value)
+static void ret_status(zval *args) {
+    zval status_collection, *status_collection_ptr, group_arr, *group_arr_ptr, worker_arr, *worker_arr_ptr;
+
+    status_collection_ptr = &status_collection;
+    group_arr_ptr = &group_arr;
+    worker_arr_ptr = &worker_arr;
+
+    CP_MAKE_STD_ZVAL(status_collection_ptr);
+    CP_MAKE_STD_ZVAL(group_arr_ptr);
+    CP_MAKE_STD_ZVAL(worker_arr_ptr);
+
+    array_init(status_collection_ptr);
+    array_init(group_arr_ptr);
+    array_init(worker_arr_ptr);
+
+    add_assoc_long(status_collection_ptr, "group_number", CPGS->group_num);
+    cpGroup *G;
+    cpWorker *W;
+
+    char buf1[CP_BUFFER_SIZE] = {0};
+    char buf2[CP_BUFFER_SIZE] = {0};
+    for (int i = 0; i < CPGS->group_num; i++) {
+        G = &(CPGS->G[i]);
+
+        zval *group_ptr;
+        CP_MAKE_STD_ZVAL(group_ptr);
+        array_init(group_ptr);
+
+        cp_add_assoc_string(group_ptr, "group_name", G->name, 1);
+
+        for (int j = 0; j < G->worker_num; j++) {
+            W = &(G->workers[j]);
+            sprintf(buf1, "[%d] pid: %d, Cpid: %d, request_number: %d\n", j, W->pid, W->CPid, W->request);
+            strcat(buf2, buf1);
+        }
+        cp_add_assoc_string(group_ptr, "workers_info", buf2, 1);
+        add_index_zval(group_arr_ptr, i, group_ptr);
+        bzero(buf1, sizeof (buf1));
+        bzero(buf2, sizeof (buf2));
+    }
+    add_assoc_zval(status_collection_ptr, "groups", group_arr_ptr);
+
+    int ret = CP_INTERNAL_SERIALIZE_SEND_MEM(status_collection_ptr, CP_SIGEVENT_STATUS);
+}
+
+int worker_onReceive(zval * user_value)
 {
     zval *type;
-    if (cp_zend_hash_find(Z_ARRVAL_P(unser_value), ZEND_STRS("type"), (void **) &type) == SUCCESS)
+    if (cp_zend_hash_find(Z_ARRVAL_P(user_value), ZEND_STRS("type"), (void **) &type) == SUCCESS)
     {
         if (strcmp(Z_STRVAL_P(type), "pdo") == 0)
         {
-            pdo_dispatch(unser_value);
+            pdo_dispatch(user_value);
         }
         else if (strcmp(Z_STRVAL_P(type), "redis") == 0)
         {
-            redis_dispatch(unser_value);
+            redis_dispatch(user_value);
+        }
+        else if (strcmp(Z_STRVAL_P(type), "status") == 0)
+        {
+            ret_status(user_value);//user_value is not useful right now, but can used for options
         }
         else if (strcmp(Z_STRVAL_P(type), "memcached") == 0)
         {
@@ -1010,7 +1058,7 @@ int worker_onReceive(zval * unser_value)
     {
         cpLog("args error no type!");
     }
-    cp_zval_ptr_dtor(&unser_value);
+    cp_zval_ptr_dtor(&user_value);
 
     return CP_TRUE;
 }

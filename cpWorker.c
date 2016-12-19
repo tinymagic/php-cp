@@ -61,7 +61,7 @@ static int cpWorker_loop(int worker_id, int group_id)
     cpSettitle(G->name);
     cpSignalSet(SIGALRM, cpWorker_do_ping, 1, 0);
     cpSignalSet(SIGTERM, cpWorker_do_stop, 1, 0);
-    alarm(CP_PING_SLEEP);
+    alarm(CPGC.ping_time);
     //    zval *ret_value;
     //    CP_ALLOC_INIT_ZVAL(ret_value);
     while (CPGS->running)
@@ -409,6 +409,6 @@ void cpWorker_do_ping()
 #else
     efree(sql);
 #endif
-    alarm(CP_PING_SLEEP);
+    alarm(CPGC.ping_time);
 }
 

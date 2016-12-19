@@ -34,7 +34,7 @@ static int dev_random_fd = -1;
 static uint16_t dummy_source_index = 0; //for multi async fun and the same source
 
 static void cpClient_weekup(int sig)
-{// do noting now
+{// do nothing now
 }
 
 static void cpClient_attach_mem()
@@ -275,7 +275,7 @@ static void* get_attach_buf(int worker_id, int max, char *mm_name)
     return buf;
 }
 
-int CP_CLIENT_SERIALIZE_SEND_MEM(zval *ret_value, cpClient *cli)
+int CP_CLIENT_SERIALIZE_SEND_MEM(zval *send_data, cpClient *cli)
 {
     int pipe_fd_write = get_writefd(CONN(cli)->worker_id);
     instead_smart dest;
@@ -283,7 +283,7 @@ int CP_CLIENT_SERIALIZE_SEND_MEM(zval *ret_value, cpClient *cli)
     dest.addr = get_attach_buf(CONN(cli)->worker_id, CPGS->max_buffer_len, CPGS->G[CONN(cli)->group_id].workers[CONN(cli)->worker_index].sm_obj.mmap_name);
     dest.max = CPGS->max_buffer_len;
     dest.exceed = 0;
-    php_msgpack_serialize(&dest, ret_value);
+    php_msgpack_serialize(&dest, send_data);
     if (dest.exceed == 1)
     {
         php_error_docref(NULL TSRMLS_CC, E_ERROR, "data is exceed,increase max_read_len Error: %s [%d] ", strerror(errno), errno);
@@ -305,7 +305,7 @@ int CP_CLIENT_SERIALIZE_SEND_MEM(zval *ret_value, cpClient *cli)
 }
 //core logic
 
-static cpGroup * cpGet_worker(cpClient *cli, zval *data_source)
+static cpGroup * cpGetWorker(cpClient *cli, zval *data_source)
 {
     cpGroup *G = NULL;
     int group_id, worker_index;
@@ -397,7 +397,7 @@ static cpGroup * cpGet_worker(cpClient *cli, zval *data_source)
             }
             pthread_mutex_unlock(&CPGS->mutex_lock);
         }
-        return cpGet_worker(cli, data_source);
+        return cpGetWorker(cli, data_source);
     }
     return G;
 }
@@ -418,7 +418,7 @@ static CPINLINE int cli_real_send(cpClient **real_cli, zval *send_data)
         {//restart server
             exit(0);
         }
-        cpGroup *G = cpGet_worker(cli, data_source);
+        cpGroup *G = cpGetWorker(cli, data_source);
         if (!G)
         {
             zend_throw_exception_ex(NULL, 0, "can not find datasource %s from pool.ini", Z_STRVAL_P(data_source) TSRMLS_CC);
@@ -1387,4 +1387,72 @@ PHP_METHOD(memcached_connect_pool, __call)
 
     RETVAL_ZVAL(RecvData.ret_value, 0, 1);
     cp_zval_ptr_dtor(&pass_data);
+}
+
+PHP_FUNCTION(pool_server_status)
+{
+    long pid;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &pid) == FAILURE || pid == 0)
+    {
+        php_printf("server is not running. \n");
+        return;
+    }
+
+    if (kill(pid, 0) < 0)
+    {
+        php_printf("server with pid %d has run away unexpectedly. \n", pid);
+        return;
+    }
+    else
+    {
+        php_printf("\nserver with pid %d is running well. \n", pid);
+
+        zval *zres, *pass_data, data_source;
+        cpClient *cli;
+
+        CP_MAKE_STD_ZVAL(pass_data);
+        array_init(pass_data);
+        cp_add_assoc_string(pass_data, "method", "all", 1);
+        cp_add_assoc_string(pass_data, "type", "status", 1);
+        cp_add_assoc_string(pass_data, "data_source", "status", 1);
+
+        CP_ZVAL_STRING(&data_source, "status", 0);
+        zres = cpConnect_pool_server(&data_source, 0);//sync
+        CP_ZEND_FETCH_RESOURCE_NO_RETURN(cli, cpClient*, &zres, -1, CP_RES_CLIENT_NAME, le_cli_connect_pool);
+
+        int ret = cli_real_send(&cli, pass_data);
+        if (ret < 0)
+        {
+            php_error_docref(NULL TSRMLS_CC, E_ERROR, "cli_real_send faild error Error: %s [%d] ", strerror(errno), errno);
+        }
+
+        cli_real_recv(cli, 0);
+        if (RecvData.type == CP_SIGEVENT_EXCEPTION)
+        {
+            zend_throw_exception(NULL, Z_STRVAL_P(RecvData.ret_value), 0 TSRMLS_CC);
+            RETVAL_BOOL(0);
+        }
+        else
+        {
+            zval *group_number, *group_arr_ptr;
+            if (cp_zend_hash_find(Z_ARR_P(RecvData.ret_value), ZEND_STRS("group_number"), (void **) &group_number) == SUCCESS) {
+                php_printf("\ngroup number: %d\n", Z_LVAL(*group_number));
+            }
+            if (cp_zend_hash_find(Z_ARR_P(RecvData.ret_value), ZEND_STRS("groups"), (void **) &group_arr_ptr) == SUCCESS) {
+                int j;
+                zval *group_item;
+
+                ZEND_HASH_FOREACH_NUM_KEY_VAL(CP_Z_ARRVAL_P(group_arr_ptr), j, group_item) { //FIXME: just for php7, and { without } is nesty
+                    zval *group_name, *workers_info;
+                    if (cp_zend_hash_find(Z_ARR_P(group_item), ZEND_STRS("group_name"), (void **) &group_name) == SUCCESS)
+                        php_printf("\ngroup %d: %s\n", j, Z_STRVAL_P(group_name));
+                    if (cp_zend_hash_find(Z_ARR_P(group_item), ZEND_STRS("workers_info"), (void **) &workers_info) == SUCCESS)
+                        php_printf("workers:\n%s\n", Z_STRVAL_P(workers_info));
+                CP_HASHTABLE_FOREACH_END();
+            }
+        }
+
+        return;
+    }
 }
