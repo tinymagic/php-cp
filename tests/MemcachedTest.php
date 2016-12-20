@@ -24,7 +24,7 @@ class MemcachedTest extends TestSuite {
 
     public function test_add()
     {
-        $ret = $this->memcached->add("phpcp", "hello world");
+        $ret = $this->memcached->set("phpcp", "hello world");
         $this->assertTrue($ret);
     }
 

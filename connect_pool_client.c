@@ -1352,7 +1352,7 @@ PHP_METHOD(memcached_connect_pool, __destruct)
 
 PHP_METHOD(memcached_connect_pool, __call)
 {
-    zval *object, *z_args, *pass_data, *zres, *data_source;
+    zval *object, *z_args, *pass_data, *zres, data_source;
     char *cmd;
     zend_size_t cmd_len;
     char *data_source_string = "172.17.0.2:11211";
@@ -1364,8 +1364,6 @@ PHP_METHOD(memcached_connect_pool, __call)
                 &object, memcached_connect_pool_class_entry_ptr,
                 &cmd, &cmd_len, &z_args) == FAILURE)
         RETURN_FALSE;
-
-    php_printf("%s\n", cmd);
 
     CP_ZVAL_STRING(&data_source, data_source_string, 0);
     cp_zval_add_ref(&z_args);
