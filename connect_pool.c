@@ -980,11 +980,13 @@ static void redis_dispatch(zval * args)
 
 static void memcached_dispatch(zval *args)
 {
-    cpLog("in memcached dispatch");
     zval *ret_value;
+    CP_MAKE_STD_ZVAL(ret_value);
     CP_ZVAL_STRING(ret_value, "ok", 0);
     CP_INTERNAL_SERIALIZE_SEND_MEM(ret_value, CP_SIGEVENT_TURE);
-    cp_zval_ptr_dtor(&ret_value);
+
+    if (ret_value)
+        cp_zval_ptr_dtor(&ret_value);
 }
 
 static void ret_status(zval *args) {

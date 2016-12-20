@@ -1354,26 +1354,28 @@ PHP_METHOD(memcached_connect_pool, __call)
 {
     zval *object, *z_args, *pass_data, *zres, *data_source;
     char *cmd;
-    char *data_source_string = "172.17.0.4:11211";
-    int cmd_length = 0;
+    zend_size_t cmd_len;
+    char *data_source_string = "172.17.0.2:11211";
     int async = 0;
     cpClient *cli;
 
-    if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Osa", &object, memcached_connect_pool_class_entry_ptr, &cmd, &cmd_length, &z_args) == FAILURE) {
+    if (zend_parse_method_parameters(
+                ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Osa",
+                &object, memcached_connect_pool_class_entry_ptr,
+                &cmd, &cmd_len, &z_args) == FAILURE)
         RETURN_FALSE;
-    }
+
+    php_printf("%s\n", cmd);
 
     CP_ZVAL_STRING(&data_source, data_source_string, 0);
-
     cp_zval_add_ref(&z_args);
+
     CP_MAKE_STD_ZVAL(pass_data);
     array_init(pass_data);
     cp_add_assoc_string(pass_data, "data_source", data_source_string, 1);
     cp_add_assoc_string(pass_data, "type", "memcached", 1);
-    /*
     cp_add_assoc_string(pass_data, "method", cmd, 1);
     add_assoc_zval(pass_data, "args", z_args);
-    */
 
     zres = cpConnect_pool_server(&data_source, async);
     CP_ZEND_FETCH_RESOURCE_NO_RETURN(cli, cpClient*, &zres, -1, CP_RES_CLIENT_NAME, le_cli_connect_pool);
