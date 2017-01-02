@@ -1435,22 +1435,22 @@ PHP_FUNCTION(pool_server_status)
         }
         else
         {
-            zval *group_number, *group_arr_ptr;
-            if (cp_zend_hash_find(Z_ARR_P(RecvData.ret_value), ZEND_STRS("group_number"), (void **) &group_number) == SUCCESS) {
-                php_printf("\ngroup number: %d\n", Z_LVAL(*group_number));
-            }
-            if (cp_zend_hash_find(Z_ARR_P(RecvData.ret_value), ZEND_STRS("groups"), (void **) &group_arr_ptr) == SUCCESS) {
-                int j;
-                zval *group_item;
-
-                ZEND_HASH_FOREACH_NUM_KEY_VAL(CP_Z_ARRVAL_P(group_arr_ptr), j, group_item) { //FIXME: just for php7, and { without } is nesty
-                    zval *group_name, *workers_info;
-                    if (cp_zend_hash_find(Z_ARR_P(group_item), ZEND_STRS("group_name"), (void **) &group_name) == SUCCESS)
-                        php_printf("\ngroup %d: %s\n", j, Z_STRVAL_P(group_name));
-                    if (cp_zend_hash_find(Z_ARR_P(group_item), ZEND_STRS("workers_info"), (void **) &workers_info) == SUCCESS)
-                        php_printf("workers:\n%s\n", Z_STRVAL_P(workers_info));
-                CP_HASHTABLE_FOREACH_END();
-            }
+//            zval *group_number, *group_arr_ptr;
+//            if (cp_zend_hash_find(Z_ARR_P(RecvData.ret_value), ZEND_STRS("group_number"), (void **) &group_number) == SUCCESS) {
+//                php_printf("\ngroup number: %d\n", Z_LVAL(*group_number));
+//            }
+//            if (cp_zend_hash_find(Z_ARR_P(RecvData.ret_value), ZEND_STRS("groups"), (void **) &group_arr_ptr) == SUCCESS) {
+//                int j;
+//                zval *group_item;
+//
+//                ZEND_HASH_FOREACH_NUM_KEY_VAL(CP_Z_ARRVAL_P(group_arr_ptr), j, group_item) { //FIXME: just for php7, and { without } is nesty
+//                    zval *group_name, *workers_info;
+//                    if (cp_zend_hash_find(Z_ARR_P(group_item), ZEND_STRS("group_name"), (void **) &group_name) == SUCCESS)
+//                        php_printf("\ngroup %d: %s\n", j, Z_STRVAL_P(group_name));
+//                    if (cp_zend_hash_find(Z_ARR_P(group_item), ZEND_STRS("workers_info"), (void **) &workers_info) == SUCCESS)
+//                        php_printf("workers:\n%s\n", Z_STRVAL_P(workers_info));
+//                CP_HASHTABLE_FOREACH_END();
+//            }
         }
 
         return;
