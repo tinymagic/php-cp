@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 zval *pdo_object = NULL;
+zval *redis_object = NULL;
 
 static void cpWorker_do_stop()
 {
@@ -298,6 +299,19 @@ static void cpFind_restart_worker(int pid, sigset_t *block_alarm, int worker_exi
                 cpShareMemory *sm_obj = &(G->workers[i].sm_obj);
                 sm_obj->mem = NULL;
                 pid = 0;
+
+                char fifo_name[CP_FIFO_NAME_LEN] = {0};
+                sprintf(fifo_name, "%s_%d_1", CP_FIFO_NAME_PRE, CP_WORKER_ID(j, i)); //worker 2 client
+                int pipe_fd_write = cpCreateFifo(fifo_name);
+                cpWorkerInfo worker_event = {0};
+                worker_event.type = CP_SIGEVENT_DIE;
+                int ret = write(pipe_fd_write, &worker_event, sizeof (worker_event));
+                if (ret == -1)
+                {
+                    cpLog("master write error Error: %s [%d]", strerror(errno), errno);
+                }
+                close(pipe_fd_write);
+
                 new_pid = cpFork_one_worker(i, j);
                 if (new_pid < 0)
                 {
@@ -392,7 +406,7 @@ CPINLINE int cpWorker_attach_mem(int worker_id, int group_id)
 void cpWorker_do_ping()
 {
     zval * stmt_value = NULL;
-    zval method, **args[1], *sql;
+    zval method, **args[1], *sql = NULL;
     CP_ZVAL_STRING(&method, "query", 0);
     CP_MAKE_STD_ZVAL(sql);
     CP_ZVAL_STRING(sql, "select 1", 0);
@@ -409,6 +423,13 @@ void cpWorker_do_ping()
 #else
     efree(sql);
 #endif
+    if (EG(exception))
+    {
+        cpLog("the connection is broken,we will del it and reconnect at next request,%p",pdo_object);
+        cp_zval_ptr_dtor(&pdo_object);
+        pdo_object = NULL;
+        EG(exception) = NULL;
+    }
     alarm(CPGC.ping_time);
 }
 

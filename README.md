@@ -56,7 +56,7 @@ step 1 将项目中的pool.ini文件mv到/etc/pool.ini,并根据需求修改配�
 
 step 2 启动代理进程：
 ```
-php pool_server start // support "start" "stop" "restart"
+php pool_server start // support "start" "stop" "restart" "status"
 ```
 
 step 3 适当修改你的php脚本:

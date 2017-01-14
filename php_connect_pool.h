@@ -130,8 +130,7 @@ extern zend_module_entry connect_pool_module_entry;
 #define CP_TCPEVENT_GETFD       4
 #define CP_GET_PID if(cpPid==0)cpPid=getpid()
 
-typedef struct _cpRecvEvent
-{
+typedef struct _cpRecvEvent {
     zval *ret_value;
     uint8_t type;
 } cpRecvEvent;
@@ -141,6 +140,7 @@ typedef struct _cpRecvEvent
 #define CP_SIGEVENT_PDO          3//11
 #define CP_SIGEVENT_STMT_OBJ     4//100
 #define CP_SIGEVENT_STATUS       5//101
+#define CP_SIGEVENT_DIE          6
 #define CP_EVENTLEN_ADD_TYPE(len,__type) \
                                          len  = len <<2;\
                                          len = len | __type;
@@ -222,7 +222,7 @@ PHP_METHOD(memcached_connect_pool, __call);
 void send_oob2proxy(zend_resource *rsrc TSRMLS_DC);
 extern void cp_serialize(smart_str *ser_data, zval *array);
 extern zval * cp_unserialize(char *data, int len);
-extern int redis_proxy_connect(zval *data_source, zval *args, int flag);
+extern int redis_proxy_connect(zval *args, int flag);
 extern int pdo_proxy_connect(zval *args, int flag);
 
 int worker_onReceive(zval *data);

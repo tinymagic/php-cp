@@ -129,9 +129,7 @@ static int cpPing_worker_loop()
                 }
                 else
                 {//redis
-                    zval z_data_source;
-                    CP_ZVAL_STRINGL(&z_data_source, data_source, keylen, 0);
-                    if (redis_proxy_connect(&z_data_source, args, CP_CONNECT_PING))
+                    if (redis_proxy_connect(args, CP_CONNECT_PING))
                     {
                         cp_zend_hash_del(Z_ARRVAL(copy), data_source, strlen(data_source) + 1);
                         cp_ser_and_setdis(&copy);

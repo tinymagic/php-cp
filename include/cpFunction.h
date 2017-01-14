@@ -20,7 +20,7 @@ extern "C" {
 #define SW_LOG_DATE_STRLEN  64
 #define CP_LOG_FORMAT "[%s]\t%s\t\n"
 #define FAILUREOR_MSG_SIZE 1024
-#define MAX_TITLE_LENGTH   127
+#define MAX_TITLE_LENGTH   120
 #define MAX_INI_LENGTH   1024
 
 #define PID_FILE_PATH "/var/run/con_pool_"

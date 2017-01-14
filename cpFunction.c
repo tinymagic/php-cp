@@ -112,12 +112,12 @@ int cpFifoRead(int pipe_fd_read, void *buf, int len)
         }
         else if (errno == EAGAIN)
         {//for async "If no process has the pipe open for writing, read() will return 0 to indicate end-of-file"
-            //            printf("worker fifo recive error %d,len %d\n", errno, n);
+            //                        printf("worker fifo recive error %d,len %d\n", errno, n);
             usleep(1);
         }
         else
         {
-            //            printf("worker fifo recive error %d,len %d\n", errno, n);
+            //                        printf("worker fifo recive error2 %d,len %d\n", errno, n);
         }
     } while ((n < 0 && errno == EINTR) || n > 0);
     return total;
@@ -152,22 +152,31 @@ void cpSettitle(char *title_name)
 {
 
     //    assert(MAX_TITLE_LENGTH > strlen(title) + 5);
+    int len = 0;
+    char name[MAX_TITLE_LENGTH + 5] = {0};
+    strcat(name, "pool_");
+    if (strlen(title_name) >= MAX_TITLE_LENGTH)
+    {
+        len = MAX_TITLE_LENGTH;
+    }
+    else
+    {
+        len = strlen(title_name);
+    }
+    memcpy(name + 5, title_name, len);
+    zval *zname;
+    CP_MAKE_STD_ZVAL(zname);
+    CP_ZVAL_STRING(zname, name, 0);
 
-    char title[MAX_TITLE_LENGTH + 5] = {0};
-    strcat(title, "pool_");
-    strcat(title, title_name);
-#if (PHP_MAJOR_VERSION >= 5 && PHP_MINOR_VERSION >= 4 )||(PHP_MAJOR_VERSION==7)
-    zval *name_ptr, name;
-    name_ptr = &name;
-    CP_ZVAL_STRING(name_ptr, title, 1);
-    cp_zval_add_ref(&name_ptr);
+#if PHP_MAJOR_VERSION >= 7 || (PHP_MAJOR_VERSION == 5 && PHP_MINOR_VERSION > 4)
     zval *retval;
     zval **args[1];
-    args[0] = &name_ptr;
+    args[0] = &zname;
 
     zval *function;
     CP_MAKE_STD_ZVAL(function);
     CP_ZVAL_STRING(function, "cli_set_process_title", 1);
+
     if (cp_call_user_function_ex(EG(function_table), NULL, function, &retval, 1, args, 0, NULL TSRMLS_CC) == FAILURE)
     {
         return;
@@ -177,10 +186,9 @@ void cpSettitle(char *title_name)
     {
         cp_zval_ptr_dtor(&retval);
     }
-
 #else
-    bzero(sapi_module.executable_location, MAX_TITLE_LENGTH);
-    memcpy(sapi_module.executable_location, title, strlen(title));
+    bzero(sapi_module.executable_location, 127);
+    memcpy(sapi_module.executable_location, Z_STRVAL_P(zname), Z_STRLEN_P(zname));
 #endif
 }
 
