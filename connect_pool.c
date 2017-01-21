@@ -59,7 +59,6 @@ static void cp_add_fail_into_mem(zval *conf, zval *data_source);
 #define CP_TEST_RETURN_TRUE(flag) ({if(flag==CP_CONNECT_PING)return CP_TRUE;})
 
 
-
 const zend_function_entry cp_functions[] = {
     PHP_FE(pool_server_create, NULL)
     PHP_FE(pool_server_status, NULL)
@@ -431,38 +430,42 @@ PHP_FUNCTION(pool_server_shutdown)
 int CP_INTERNAL_SERIALIZE_SEND_MEM(zval *send_data, uint8_t __type)
 {
     cpShareMemory *sm_obj = &(CPGS->G[CPWG.gid].workers[CPWG.id].sm_obj);
+    int real_len = 0;
+#if PHP_MAJOR_VERSION < 7
     instead_smart dest;
     dest.len = 0;
     dest.addr = sm_obj->mem;
     dest.max = CPGC.max_read_len;
     dest.exceed = 0;
     php_msgpack_serialize(&dest, send_data);
+    real_len = dest.len;
     if (dest.exceed == 1)
     {
         CP_INTERNAL_ERROR_SEND("data is exceed,increase max_read_len");
         return SUCCESS;
     }
-    else
+#else
+    zend_string * zstr = php_swoole_serialize(send_data);
+    if (zstr->len >= CPGS->max_buffer_len)
     {
-        //        union sigval sigvalPara;
-        //        CP_EVENTLEN_ADD_TYPE(dest.len,__type);//todo 2字节int 长度检查
-        //        sigvalPara.sival_int = dest.len;
-        //        if (sigqueue(pid, CP_SIG_EVENT, sigvalPara) == -1) {
-        //            cpLog("sigqueue error %d", errno);
-        //            return FAILURE;
-        //        }
-        cpWorkerInfo worker_event;
-        worker_event.len = dest.len;
-        worker_event.type = __type;
-        worker_event.pid = CPWG.event.pid;
-        int ret = write(CPWG.pipe_fd_write, &worker_event, sizeof (worker_event));
-        if (ret == -1)
-        {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR, "write error Error: %s [%d]", strerror(errno), errno);
-        }
-
+        CP_INTERNAL_ERROR_SEND("data is exceed,increase max_read_len");
         return SUCCESS;
     }
+    real_len = zstr->len;
+    memcpy(sm_obj->mem, zstr->val, zstr->len);
+    zend_string_release(zstr);
+#endif
+    cpWorkerInfo worker_event;
+    worker_event.len = real_len;
+    worker_event.type = __type;
+    worker_event.pid = CPWG.event.pid;
+    int ret = write(CPWG.pipe_fd_write, &worker_event, sizeof (worker_event));
+    if (ret == -1)
+    {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "write error Error: %s [%d]", strerror(errno), errno);
+    }
+
+    return SUCCESS;
 }
 
 int pdo_proxy_connect(zval *args, int flag)
@@ -475,7 +478,11 @@ int pdo_proxy_connect(zval *args, int flag)
         pdo_proxy_pdo(args);
         return 1;
     }
+#if PHP_MAJOR_VERSION < 7
     CP_MAKE_STD_ZVAL(new_obj);
+#else
+    new_obj = ecalloc(sizeof (zval), 1);
+#endif
     CP_ZVAL_STRING(&pdo_name, "pdo", 0);
     if (cp_zend_hash_find_ptr(EG(class_table), &pdo_name, (void **) &pdo_ce) == FAILURE)
     {
@@ -516,17 +523,11 @@ int pdo_proxy_connect(zval *args, int flag)
         cp_zval_ptr_dtor(&ret_pdo_obj);
     if (EG(exception))
     {
-        cp_zval_ptr_dtor(&new_obj);
-        //CP_TEST_RETURN_FALSE(flag);
-        //cp_add_fail_into_mem(args, data_source);
+        CP_DEL_OBJ(new_obj);
         CP_SEND_EXCEPTION_RETURN;
     }
     else
     {
-        if (flag == CP_CONNECT_PING)
-            cp_zval_ptr_dtor(&new_obj);
-        CP_TEST_RETURN_TRUE(flag);
-
         pdo_object = new_obj;
         if (flag == CP_CONNECT_NORMAL)
         {
@@ -552,8 +553,7 @@ static void pdo_proxy_pdo(zval * args)
 
         if (cp_internal_call_user_function(pdo_object, method, &ret_value, args) == FAILURE)
         {
-            cp_zval_ptr_dtor(&pdo_object);
-            pdo_object = NULL;
+            CP_DEL_OBJ(pdo_object);
             char cp_error_str[FAILUREOR_MSG_SIZE] = {0};
             snprintf(cp_error_str, FAILUREOR_MSG_SIZE, "call pdo method( %s ) error!", Z_STRVAL_P(method));
             CP_INTERNAL_ERROR_SEND(cp_error_str);
@@ -568,8 +568,7 @@ static void pdo_proxy_pdo(zval * args)
                 if (p || p2)
                 {//del reconnect and retry
                     cpLog("del and retry %s,%s", p, p2);
-                    cp_zval_ptr_dtor(&pdo_object);
-                    pdo_object = NULL;
+                    CP_DEL_OBJ(pdo_object);
                     pdo_proxy_connect(args, CP_CONNECT_NORMAL);
                 }
                 else
@@ -668,8 +667,7 @@ static void pdo_proxy_stmt(zval * args)
             char *p2 = strcasestr(Z_STRVAL_P(str), "There is already an active transaction");
             if (p || p2)
             {
-                cp_zval_ptr_dtor(&pdo_object);
-                pdo_object = NULL;
+                CP_DEL_OBJ(pdo_object);
             }
             cp_zval_ptr_dtor(&str);
             cp_zval_ptr_dtor(&pdo_stmt);
@@ -777,7 +775,12 @@ int redis_proxy_connect(zval *args, int flag)
     array_init(ex_arr);
     CP_ZVAL_STRINGL(&zdelim, ":", 1, 0);
     cp_explode(&zdelim, data_source, ex_arr, LONG_MAX);
+
+#if PHP_MAJOR_VERSION < 7
     CP_MAKE_STD_ZVAL(new_obj);
+#else
+    new_obj = ecalloc(sizeof (zval), 1);
+#endif
     zend_class_entry *redis_ce = NULL;
 
     zval redis_name;
@@ -810,8 +813,6 @@ int redis_proxy_connect(zval *args, int flag)
         {
             cp_zval_ptr_dtor(&ex_arr);
             cp_zval_ptr_dtor(&ret_redis_obj);
-            //            CP_TEST_RETURN_FALSE(flag);
-            //            cp_add_fail_into_mem(args, data_source);
             CP_INTERNAL_ERROR_SEND_RETURN("connect redis error!");
         }
         else
@@ -821,17 +822,9 @@ int redis_proxy_connect(zval *args, int flag)
     }
     if (EG(exception))
     {
-        cp_zval_ptr_dtor(&new_obj);
+        CP_DEL_OBJ(new_obj);
         cp_zval_ptr_dtor(&ex_arr);
-        //        CP_TEST_RETURN_FALSE(flag);
-        //        cp_add_fail_into_mem(args, data_source);
         CP_SEND_EXCEPTION_RETURN;
-    }
-    if (flag == CP_CONNECT_PING)
-    {
-        cp_zval_ptr_dtor(&new_obj);
-        cp_zval_ptr_dtor(&ex_arr);
-        return CP_TRUE;
     }
 
     if (!cp_redis_auth(new_obj, args))
@@ -871,8 +864,7 @@ int redis_proxy_connect(zval *args, int flag)
             }
             else
             {
-                cp_zval_ptr_dtor(&redis_object);
-                redis_object = NULL;
+                CP_DEL_OBJ(redis_object);
                 CP_SEND_EXCEPTION;
             }
         }
@@ -922,8 +914,7 @@ static void redis_dispatch(zval * args)
                 //                    char *p4 = strstr(Z_STRVAL_P(str), "Connection closed");
                 //                    if (p || p2 || p3 || p4)
                 //                    {
-                cp_zval_ptr_dtor(&redis_object);
-                redis_object = NULL;
+                CP_DEL_OBJ(redis_object);
                 // }
                 cp_zval_ptr_dtor(&str);
             }

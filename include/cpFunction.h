@@ -23,7 +23,7 @@ extern "C" {
 #define MAX_TITLE_LENGTH   120
 #define MAX_INI_LENGTH   1024
 
-#define PID_FILE_PATH "/var/run/con_pool_"
+#define PID_FILE_PATH "/var/run/php_connection_pool"
 #define cpLog(str,...)     \
                         do \
                             { \

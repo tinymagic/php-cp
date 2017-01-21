@@ -12,7 +12,7 @@
 ## 安装
 
 + `phpize && ./configure && make install`
-+ `echo "extension=xx/connect_pool.so" > php.ini`
++ `echo "extension=xx/connect_pool.so" >> php.ini`
 
 ## 使用Docker安装
 
@@ -52,14 +52,23 @@ pdoProxy和原生Pdo不一样的一点是 默认pdo是静默模式 不抛异常 
 - discuz 请参考 https://github.com/xluohome/php-cp-for-discuz
 
 ## 使用
-step 1 将项目中的pool.ini文件mv到/etc/pool.ini,并根据需求修改配置文件
-
-step 2 启动代理进程：
+* 将项目中的pool.ini文件mv到/etc/pool.ini,并根据需求修改配置文件
 ```
-php pool_server start // support "start" "stop" "restart" "status"
+$ mv ./pool.ini.example /etc/pool.ini
+$ chmod +x ./pool_server //pool_server为php脚本 可自行修改
+$ mv pool_server /usr/local/bin/
 ```
 
-step 3 适当修改你的php脚本:
+* 日常运维使用
+```
+$ pool_server start //启动服务 如果配置文件的daemonize开启则后台运行 否则为前台运行 Ctrl+c结束服务
+$ pool_server stop //停止服务
+$ pool_server restart //重启服务
+$ pool_server status //查看服务状态
+```
+
+* 日常开发使用  
+  将该项目源码加入IDE的外部库中， 即可有代码提示, 切记不要加入php配置的include path中
 
 ``` php
 <?php

@@ -90,7 +90,7 @@
 #if PHP_MAJOR_VERSION < 7
 #include "msgpack/php_msgpack.h"
 #else
-#include "msgpack7/php_msgpack.h"
+#include "msgpack7/php_swoole_serialize.h"
 #endif
 #ifdef ZTS
 #include "TSRM.h"

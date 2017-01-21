@@ -173,6 +173,9 @@ static CPINLINE int cp_internal_call_user_function(zval *object, zval *fun, zval
 static CPINLINE int cp_zend_hash_find_ptr(HashTable *ht, zval *k, void **ret) {
     return cp_zend_hash_find(ht, Z_STRVAL_P(k), Z_STRLEN_P(k) + 1, ret);
 }
+#define CP_DEL_OBJ(obj)\
+                                 cp_zval_ptr_dtor(&obj);\
+                                 obj = NULL;
 #else
 //------------下面是php7版本------------------------------------
 #include <ext/standard/php_smart_string.h>
@@ -425,6 +428,9 @@ static CPINLINE int cp_internal_call_user_function(zval *object, zval *fun, zval
                }\
               return CP_FALSE; \
           }});
-
+#define CP_DEL_OBJ(obj)\
+                                 cp_zval_ptr_dtor(&obj);\
+                                 efree(obj);\
+                                 obj = NULL;
 #endif /* EXT_SWOOLE_PHP7_WRAPPER_H_ */
 #endif

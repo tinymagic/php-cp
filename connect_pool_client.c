@@ -279,30 +279,43 @@ static void* get_attach_buf(int worker_id, int max, char *mm_name)
 int CP_CLIENT_SERIALIZE_SEND_MEM(zval *send_data, cpClient *cli)
 {
     int pipe_fd_write = get_writefd(CONN(cli)->worker_id);
+    int real_len = 0;
+    void* attach_addr = get_attach_buf(CONN(cli)->worker_id, CPGS->max_buffer_len, CPGS->G[CONN(cli)->group_id].workers[CONN(cli)->worker_index].sm_obj.mmap_name);
+#if PHP_MAJOR_VERSION < 7
     instead_smart dest;
     dest.len = 0;
-    dest.addr = get_attach_buf(CONN(cli)->worker_id, CPGS->max_buffer_len, CPGS->G[CONN(cli)->group_id].workers[CONN(cli)->worker_index].sm_obj.mmap_name);
+    dest.addr = attach_addr;
     dest.max = CPGS->max_buffer_len;
     dest.exceed = 0;
     php_msgpack_serialize(&dest, send_data);
+    real_len = dest.len;
     if (dest.exceed == 1)
     {
         php_error_docref(NULL TSRMLS_CC, E_ERROR, "data is exceed,increase max_read_len Error: %s [%d] ", strerror(errno), errno);
+        return FAILURE;
     }
-    else
+#else    
+    zend_string * zstr = php_swoole_serialize(send_data);
+    if (zstr->len >= CPGS->max_buffer_len)
     {
-        cpWorkerInfo worker_event;
-        worker_event.len = dest.len;
-        worker_event.pid = cpPid;
-        worker_event.type = 0; //暫時沒用
-        int ret = write(pipe_fd_write, &worker_event, sizeof (worker_event));
-        if (ret == -1)
-        {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR, "write error Error: %s [%d]", strerror(errno), errno);
-        }
-        return SUCCESS;
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "data is exceed,increase max_read_len Error: %s [%d] ", strerror(errno), errno);
+        return FAILURE;
     }
-    return FAILURE;
+    memcpy(attach_addr, zstr->val, zstr->len);
+    zend_string_release(zstr);
+#endif
+
+    cpWorkerInfo worker_event;
+    worker_event.len = real_len;
+    worker_event.pid = cpPid;
+    worker_event.type = 0;
+    int ret = write(pipe_fd_write, &worker_event, sizeof (worker_event));
+    if (ret == -1)
+    {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "write error Error: %s [%d]", strerror(errno), errno);
+    }
+    return SUCCESS;
+
 }
 //core logic
 
@@ -480,11 +493,12 @@ static CPINLINE int cli_real_recv(cpClient *cli, int async)
     } while (event.pid != cpPid); //有可能有脏数据  读出来
 
     log_increase_size(event.len, cli);
-    if (event.type != CP_SIGEVENT_PDO)
-    {
-        void * buf = get_attach_buf(CONN(cli)->worker_id, CPGS->max_buffer_len, CPGS->G[CONN(cli)->group_id].workers[CONN(cli)->worker_index].sm_obj.mmap_name);
-        php_msgpack_unserialize(ret_value, buf, event.len);
-    }
+    void * buf = get_attach_buf(CONN(cli)->worker_id, CPGS->max_buffer_len, CPGS->G[CONN(cli)->group_id].workers[CONN(cli)->worker_index].sm_obj.mmap_name);
+#if PHP_MAJOR_VERSION < 7
+    php_msgpack_unserialize(ret_value, buf, event.len);
+#else
+    php_swoole_unserialize(buf, event.len, ret_value, NULL);
+#endif
     RecvData.type = event.type;
     RecvData.ret_value = ret_value;
     return SUCCESS;
@@ -493,7 +507,7 @@ static CPINLINE int cli_real_recv(cpClient *cli, int async)
 static void async_done(zval *object, zend_class_entry *class_entry_ptr)
 {
     zval *zres;
-    cpClient *cli;
+    cpClient *cli = NULL;
     if (cp_zend_hash_find(Z_OBJPROP_P(object), ZEND_STRS("cli"), (void **) &zres) == SUCCESS)
     {
         CP_ZEND_FETCH_RESOURCE_NO_RETURN(cli, cpClient*, &zres, -1, CP_RES_CLIENT_NAME, le_cli_connect_pool);
@@ -530,7 +544,7 @@ static void check_need_exchange(zval * object, char *cur_type)
 
 static char* php_check_ms(char *cmd, zval *z_args, zval* object)
 {
-    zval *enable_slave, *sql, *in_tran;
+    zval *enable_slave = NULL, *sql = NULL, *in_tran = NULL;
     char *cur_type = "m";
     if (strcasecmp("beginTransaction", cmd) == 0)
     {
@@ -604,7 +618,7 @@ int cp_system_random(int min, int max)
 
 static CPINLINE zval* create_pass_data(char* cmd, zval* z_args, zval* object, char* cur_type, zval **ret_data_source)
 {
-    zval *data_source, *username, *pwd, *options, *pass_data, *zval_conf, *real_data_source_arr;
+    zval *data_source = NULL, *username = NULL, *pwd = NULL, *options = NULL, *pass_data = NULL, *zval_conf = NULL, *real_data_source_arr = NULL;
     zval_conf = cp_zend_read_property(pdo_connect_pool_class_entry_ptr, object, ZEND_STRL("config"), 0 TSRMLS_DC);
 
     zval *slave;
@@ -682,24 +696,18 @@ int static stmt_fetch_obj(zval *args, zend_class_entry *ce, zval *return_value)
     {
 #if PHP_MAJOR_VERSION == 7
         zval retval;
-        fci.function_table = &ce->function_table;
         ZVAL_UNDEF(&fci.function_name);
-        fci.symbol_table = NULL;
         fci.retval = &retval;
         fci.param_count = 0;
         fci.params = NULL;
         fci.no_separation = 1;
+        fci.object = Z_OBJ_P(return_value);
 
         zend_fcall_info_args_ex(&fci, ce->constructor, args);
 
         fcc.initialized = 1;
         fcc.function_handler = ce->constructor;
-        fcc.calling_scope = EG(scope);
-        fcc.called_scope = ce;
-
-        object_init_ex(return_value, ce);
-
-        fci.object = Z_OBJ_P(return_value);
+        fcc.called_scope = Z_OBJCE_P(return_value);
         fcc.object = Z_OBJ_P(return_value);
 #else
         zval *retval;

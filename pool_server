@@ -1,41 +1,68 @@
+#!/bin/env php
 <?php
-ini_set('memory_limit', '2048M');
-ini_set("display_errors", "On");
-$pid_location = "/var/run/con_pool_.pid";
-$conf = "/etc/pool.ini"; //pool_server的配置文件
+ini_set("memory_limit", '2048M');
+ini_set("display_errors", "1");
+ini_set("display_startup_errors", "1");
+
+define("PID_FILE", "/var/run/php_connection_pool.pid"); //pid文件路径 不能修改
+$config_file = "/etc/pool.ini"; //pool_server的配置文件
+
+$usage = "Usage: pool_server {start|status|stop|restart}" . PHP_EOL;
+
+$exit_code_general = 1;
+$exit_code_invoke = 126;
 
 if (empty($argv[1])) {
-    echo "Usage: pool_server {start|status|stop|restart}\n";
-    exit;
+    echo $usage;
+    exit($exit_code_general);
+}
+$cmd = $argv[1];
+
+if (is_readable($config_file) === false) {
+    echo "Can NOT read config file, 请复制pool.ini.example到{$config_file}路径下" . PHP_EOL;
+    exit($exit_code_general);
+}
+if (parse_ini_file($config_file, true) === false) { //for stop && reload && test ini
+    echo "Malformed configuration file {$config_file}, 请检查配置文件ini格式是否正确" . PHP_EOL;
+    exit($exit_code_general);
 }
 
-$cmd = $argv[1];
-if (($conf_arr = parse_ini_file($conf, true)) === false)//for stop && reload && test ini
-    die("bad ini file\n");
-
+$pid = false;
+if ($cmd !== "start") {
+    if (file_exists(PID_FILE) === false) {
+        echo sprintf("The pid file %s does NOT exist, Pls. check service is running" . PHP_EOL, PID_FILE);
+        exit($exit_code_invoke);
+    } else {
+        $pid = intval(file_get_contents(PID_FILE));
+        if ($pid <= 0) {
+            echo "Malformed pid file" . PHP_EOL;
+            exit($exit_code_invoke);
+        }
+    }
+}
 
 switch ($cmd) {
     case "start":
-        pool_server_create($conf);
+        pool_server_create($config_file);
         break;
     case "status":
-        pool_server_status((int) file_get_contents($pid_location));
+        pool_server_status($pid);
         break;
     case "reload":
-        pool_server_reload((int) file_get_contents($pid_location));
-        echo "Tips: The reload can only modify 'pool_min','pool_max','recycle_num' and 'idel_time'\n";
+        pool_server_reload($pid);
+        echo "Tips: The reload can only modify 'pool_min','pool_max','recycle_num' and 'idel_time'" . PHP_EOL;
         die;
         break;
     case "stop":
-        pool_server_shutdown((int) file_get_contents($pid_location));
-        file_put_contents($pid_location, "");
+        pool_server_shutdown($pid);
+        file_put_contents(PID_FILE, "");
         break;
     case "restart":
-        @pool_server_shutdown((int) file_get_contents($pid_location));
+        @pool_server_shutdown($pid);
         sleep(1);
-        pool_server_create($conf);
+        pool_server_create($config_file);
         break;
     default:
-        echo "Usage: pool_server {start|status|stop|restart}\n";
-        break;
+        echo $usage;
+        exit($exit_code_general);
 }

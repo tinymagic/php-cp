@@ -81,7 +81,11 @@ static int cpWorker_loop(int worker_id, int group_id)
             continue;
         }
         CPWG.working = 1;
+#if PHP_MAJOR_VERSION < 7
         php_msgpack_unserialize(ret_value, sm_obj->mem, CPWG.event.len);
+#else
+        php_swoole_unserialize(sm_obj->mem, CPWG.event.len, ret_value, NULL);
+#endif
         worker_onReceive(ret_value);
         CPWG.working = 0;
     }
@@ -407,11 +411,16 @@ void cpWorker_do_ping()
 {
     zval * stmt_value = NULL;
     zval method, **args[1], *sql = NULL;
+    if (CPWG.working == 1)
+    {
+        alarm(CPGC.ping_time);
+        return;
+    }
     CP_ZVAL_STRING(&method, "query", 0);
     CP_MAKE_STD_ZVAL(sql);
     CP_ZVAL_STRING(sql, "select 1", 0);
     args[0] = &sql;
-    if (pdo_object != NULL && CPWG.working == 0)
+    if (pdo_object != NULL)
     {
         cp_call_user_function_ex(NULL, &pdo_object, &method, &stmt_value, 1, args, 0, NULL TSRMLS_CC);
         if (stmt_value)
@@ -419,15 +428,14 @@ void cpWorker_do_ping()
     }
 #if PHP_MAJOR_VERSION==7
     zval_ptr_dtor(&method);
-    zval_ptr_dtor(&sql);
+    zval_ptr_dtor(sql);
 #else
     efree(sql);
 #endif
     if (EG(exception))
     {
-        cpLog("the connection is broken,we will del it and reconnect at next request,%p",pdo_object);
-        cp_zval_ptr_dtor(&pdo_object);
-        pdo_object = NULL;
+        cpLog("the connection is broken,we will del it and reconnect at next request,%p", pdo_object);
+        CP_DEL_OBJ(pdo_object);
         EG(exception) = NULL;
     }
     alarm(CPGC.ping_time);
